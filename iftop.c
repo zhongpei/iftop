@@ -582,21 +582,22 @@ static void handle_pppoes_packet(unsigned char* args, const struct pcap_pkthdr* 
 
     if(ether_type == ETHERTYPE_PPPOES) {
         struct ip* iptr;
+        int dir = -1;
         if(have_hw_addr && memcmp(eptr->ether_shost, if_hw_addr, 6) == 0 ) {
             /* packet leaving this i/f */
             dir = 1;
         }
         else if(have_hw_addr && memcmp(eptr->ether_dhost, if_hw_addr, 6) == 0 ) {
-	    /* packet entering this i/f */
-	    dir = 0;
-	}
-	else if (memcmp("\xFF\xFF\xFF\xFF\xFF\xFF", eptr->ether_dhost, 6) == 0) {
-	  /* broadcast packet, count as incoming */
+            /* packet entering this i/f */
             dir = 0;
-   	}
-   		iptr = (struct ip*)(payload + 8); /* alignment? */
+        }
+        else if (memcmp("\xFF\xFF\xFF\xFF\xFF\xFF", eptr->ether_dhost, 6) == 0) {
+            /* broadcast packet, count as incoming */
+            dir = 0;
+        }
+        iptr = (struct ip*)(payload + 8); /* alignment? */
         handle_ip_packet(iptr, dir);
-	}
+    }
 
 }
 static void handle_eth_packet(unsigned char* args, const struct pcap_pkthdr* pkthdr, const unsigned char* packet)
@@ -617,7 +618,7 @@ static void handle_eth_packet(unsigned char* args, const struct pcap_pkthdr* pkt
         payload += sizeof(struct vlan_8021q_header);
     }
 
-    if(ether_type == ETHERTYPE_IP || ether_type == ETHERTYPE_IPV6) {
+    if(ether_type == ETHERTYPE_IP || ether_type == ETHERTYPE_IPV6 || ether_type == ETHERTYPE_PPPOES) {
         struct ip* iptr;
         int dir = -1;
         
@@ -636,7 +637,10 @@ static void handle_eth_packet(unsigned char* args, const struct pcap_pkthdr* pkt
 	  /* broadcast packet, count as incoming */
             dir = 0;
         }
-
+        if (ether_type == ETHERTYPE_PPPOES)
+        {
+            payload += 8;
+        }
         /* Distinguishing ip_hdr and ip6_hdr will be done later. */
         iptr = (struct ip*)(payload); /* alignment? */
         handle_ip_packet(iptr, dir);
@@ -739,10 +743,7 @@ void packet_init() {
     dlt = pcap_datalink(pd);
     if(dlt == DLT_EN10MB) {
         packet_handler = handle_eth_packet;
-    }else if(dlt == ETHERTYPE_PPPOES)
-	{
-        packet_handler = handle_pppoes_packet;
-	}
+    }
 #ifdef DLT_PFLOG
     else if (dlt == DLT_PFLOG) {
 		packet_handler = handle_pflog_packet;
